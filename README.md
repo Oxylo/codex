@@ -1,11 +1,8 @@
 # codex
 Actuarial library for benefit projections and simulations
 
-Installation
-============
-
 Installation (local)
---------------------
+====================
 
 ::
 
@@ -14,7 +11,7 @@ Installation (local)
     
     
 Run program (inside python CLI or Jupyter)
-------------------------------------------
+==========================================
 
 The idea is to create a Tableau object first, containing all data and projection calculations.
 
