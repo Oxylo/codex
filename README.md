@@ -18,7 +18,7 @@ Tableau objects is initialized with the following (default) parameters:
 * nsimuls=1
 * maxyears=None
 
-    >>> from codex import Tableau
-    >>> tab = Tableau()
-    >>> my_tableau = tab.tableau
+    $ from codex import Tableau
+    $ tab = Tableau()
+    $ my_tableau = tab.tableau
     
