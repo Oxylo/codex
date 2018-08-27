@@ -4,8 +4,6 @@ Actuarial library for benefit projections and simulations
 Installation (local)
 ====================
 
-::
-
     $ git clone https://github.com/Oxylo/CODEX3.git codex3
     $ pip install -r requirements.txt
     
@@ -19,8 +17,6 @@ Tableau objects is initialized with the following (default) parameters:
 * xlswb='/home/pieter/projects/codex/data/codex_data_db.xls'
 * nsimuls=1
 * maxyears=None
-
-::
 
     >>> from codex import Tableau
     >>> tab = Tableau()
