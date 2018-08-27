@@ -11,6 +11,12 @@ Installation (local)
 Run program (inside python CLI or Jupyter)
 ==========================================
 
+    >>> from codex import Tableau
+    >>> tab = Tableau()
+    >>> my_tableau = tab.tableau
+
+
+Note: 
 The idea is to create a Tableau object first, containing all data and projection calculations.
 
 Tableau objects is initialized with the following (default) parameters:
@@ -18,7 +24,8 @@ Tableau objects is initialized with the following (default) parameters:
 * nsimuls=1
 * maxyears=None
 
-    $ from codex import Tableau
-    $ tab = Tableau()
-    $ my_tableau = tab.tableau
+
+  
+
+
     
