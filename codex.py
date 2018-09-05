@@ -317,7 +317,7 @@ class Tableau:
                                 tab.nqx_primo_idx_shifted /
                                 tab.pct_rendement_ultimo_idx_shifted)
         # Cast colum to be summed from object to float!
-        tab['discount_varl'] = c * tab.discount.astype('float')
+        tab['discount_varl'] = c * tab.discount_varl.astype('float')
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         cum_discount = (
           tab.groupby(['regeling_id', 'aanspraak'])['discount_varl'].cumsum()
