@@ -126,7 +126,7 @@ class Tableau:
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_indexatie_primo_idx'] = (
             grouped['pct_indexatie_primo'].
-            apply(calculate_cumulative_index).shift(-1)
+            apply(calculate_cumulative_index)
             )
         tab['pct_indexatie_primo_idx_shifted'] = (
           grouped['pct_indexatie_primo_idx'].shift().fillna(1)
@@ -141,7 +141,7 @@ class Tableau:
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_indexatie_primo_inactief_idx'] = (
             grouped['pct_indexatie_primo_inactief'].
-            apply(calculate_cumulative_index).shift(-1)
+            apply(calculate_cumulative_index)
             )
         tab['pct_indexatie_primo_inactief_idx_shifted'] = (
           grouped['pct_indexatie_primo_inactief_idx'].shift().fillna(1)
@@ -299,9 +299,9 @@ class Tableau:
                               tab.backservice_el)
         tab['tijdsevenredig'] = (avg_pay * tab.tijdsevenredig_ml +
                                  final_pay * tab.tijdsevenredig_el)
-        tab['verzekerd'] = (defined_benefit * tab.tijdsevenredig +
+        tab['verzekerd'] = (defined_benefit * (tab.tijdsevenredig +
                             np.maximum(0, tab.fsy - 1) * tab.percentage *
-                            tab.pt_pensioengrondslag)
+                            tab.pt_pensioengrondslag))
         tab['eur_premie_db'] = (
           defined_benefit * (tab.opbouw - tab.backservice) * tab.tarief_primo
           )
@@ -319,11 +319,9 @@ class Tableau:
         # Cast colum to be summed from object to float!
         tab['discount_varl'] = c * tab.discount_varl.astype('float')
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
-        cum_discount = (
-          tab.groupby(['regeling_id', 'aanspraak'])['discount_varl'].cumsum()
-          )
+        tab['cum_discount'] = (grouped['discount_varl'].cumsum())
         tab['capital'] = (c * (tab.pct_rendement_ultimo_idx /
-                          tab.nqx_primo_idx) * cum_discount)
+                          tab.nqx_primo_idx) * tab.cum_discount)
 
         # universal premium
         tab['eur_premie'] = (defined_benefit * tab.eur_premie_db + c *

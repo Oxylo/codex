@@ -8,3 +8,8 @@ setup.py
 
 validate.py (validates input)
 
+Fixes:
+
+change header:
+pct_indexatie_primo --> pct_indexatie_ultimo ??
+
