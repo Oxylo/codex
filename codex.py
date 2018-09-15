@@ -6,7 +6,8 @@ import pandas as pd
 from load import read_xlswb
 from settings import XLSWB, AGE_ADJUSTMENT
 from utils import (calculate_cumulative_index,
-                   calculate_cumulative_index_conjugate)
+                   calculate_cumulative_index_conjugate,
+                   get_tar_at_pensiondate)
 from vectorize import (pensiondate, future_service_years,
                        past_service_years, total_service_years,
                        nprojection_years, age, ft_base,
@@ -308,7 +309,7 @@ class Tableau:
 
         # DC
         c = tab.aanspraak.isin(['VARL'])
-        tab['pct_staffel'] = c * tab.tarief_primo
+        tab['pct_staffel'] = c * tab.tarief_primo * tab.percentage
         tab['eur_premie_dc'] = (c * tab.pro_rata * tab.pct_staffel *
                                 tab.pt_pensioengrondslag)
         cf_timing_factor = ((1 + 0.5 * tab.pct_rendement_ultimo) /
@@ -343,3 +344,103 @@ class Tableau:
         tableau = self._lookup_increments(tableau)
         return self._run_projections(tableau)
 
+    def add_summary(self, tar_at_pensiondate):
+        """ Return summary containing 1 benefit projection (capital or
+        OP/NP) per employee/plan/simulation.
+
+        Parameters
+        ----------
+            tar_at_pensiondate : string of filename like
+            '...Desktop/tar_AG2014_op_pensioendatum.csv'
+
+        """
+        infile = tar_at_pensiondate
+
+        # 1) start with tableau
+        data = self.tableau
+
+        # 2) filter rows where (fsy==1) & (aanspraak in ('OPLL', 'VARL',
+        # 'NPLLRS')) # TO DO: 'NPTLB', 'NPLL-O'
+        accrual_claims = ['OPLL', 'VARL', 'NPLLRS']
+        filtered = data[(data.fsy==1) &
+                        (data.aanspraak.isin(accrual_claims))].copy()
+
+        # 3) get tarief at pension date (long format)
+        tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=True)
+
+        # 4) calculate value per claim at pension date
+        filtered['pensioenlfd'] = filtered.pensioenlfd.astype(int)
+        filtered = filtered.join(tar_at_pd, on=['geslacht', 'leeftijd0',
+                                                'pensioenlfd', 'aanspraak'])
+        filtered['tar'] = filtered.tar.fillna(1)
+        is_db = filtered.aanspraak.isin(['OPLL', 'NPLLRS'])
+        filtered['capital'] = (is_db * filtered.tar *
+                               filtered.tijdsevenredig +
+                               (1 - is_db) * filtered.capital)
+
+        # 5) create new df with 1 row per pension plan:
+        grouped = filtered.groupby(['regeling_id', 'id', 'simulnr'])
+        grp_name = grouped['naam'].first()
+        grp_sex = grouped['geslacht'].first()
+        grp_age0 = grouped['leeftijd0'].first()
+        grp_type = grouped['type_regeling'].first()
+        grp_memo = grouped['memo'].first()
+        grp_aow = grouped['aow'].first()
+        grp_op_pv = grouped['op_premievrij'].first()
+        grp_np_pv = grouped['np_premievrij'].first()
+        grp_cap = grouped['capital'].sum()
+        grp_contr = grouped['cum_eigen_bijdrage'].first()
+        grp_page = grouped['pensioenlfd'].first()
+
+        summary = pd.DataFrame({'naam': grp_name,
+                                'geslacht': grp_sex,
+                                'leeftijd0': grp_age0,
+                                'type_regeling': grp_type,
+                                'memo': grp_memo,
+                                'aow': grp_aow,
+                                'op_premievrij': grp_op_pv,
+                                'np_premievrij': grp_np_pv,
+                                'capital': grp_cap,
+                                'cum_eigen_bijdrage': grp_contr,
+                                'pensioenlfd': grp_page,}).reset_index()
+
+        # 6) lookup tarief (tar_op and tar_np) at pension date (use wide
+        # format)
+        tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=False)
+        summary = summary.join(tar_at_pd, on=['geslacht',
+                                              'leeftijd0', 'pensioenlfd'])
+
+        # 7) calculate
+        combi_factor_100_70 = summary.tar_OPLL + 0.70 * summary.tar_NPLLRS
+        summary['projectie_op'] = summary.capital / combi_factor_100_70
+        summary['projectie_op_plus_pv'] = (summary.projectie_op +
+                                           (summary.op_premievrij *
+                                            summary.tar_OPLL +
+                                            summary.np_premievrij *
+                                            summary.tar_NPLLRS) /
+                                           combi_factor_100_70)
+        summary['projectie_op_plus_pv_aow'] = (summary.projectie_op_plus_pv +
+                                               summary.aow)
+        summary['projectie_op_wg'] = ((summary.capital -
+                                      summary.cum_eigen_bijdrage) /
+                                      combi_factor_100_70)
+        summary['projectie_op_wn'] = (summary.projectie_op -
+                                      summary.projectie_op_wg)
+
+        empl_data = self.data.tbl_employee[['geboortedatum',
+                                           'ft_salaris', 'pt_percentage']]
+        summary = (summary.reset_index().
+                   join(empl_data, on=['id']).set_index(['regeling_id', 'id']))
+        plan_data = (self.data.tbl_pension_plan.
+                     groupby('regeling_id')[['premie_franchise',
+                                             'premie_plafond',
+                                             'pct_eigen_bijdrage']].first())
+        summary = (summary.reset_index().
+                   join(plan_data, on=['regeling_id']).
+                   set_index(['regeling_id', 'id']))
+        pension_salary = np.minimum(summary.ft_salaris, summary.premie_plafond)
+        summary['eigen_bijdrage0'] = (summary.pt_percentage *
+                                      summary.pct_eigen_bijdrage *
+                                      np.maximum(0, pension_salary -
+                                                 summary.premie_franchise))
+        return summary
