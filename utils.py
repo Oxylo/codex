@@ -34,15 +34,16 @@ class CashFlows:
         ins_id = 2 * n * ['OPLL'] + 2 * n * ['NPLLRS'] + 2 * n * ['NPTLO']
         sex_in = 3 * (n * ['M'] + n * ['F'])
         cal_yr = 6 * list(range(self.start, self.start + n))
-        factors = pd.DataFrame({'insurance_id': ins_id,
-                                'sex_insured': sex_in,
-                                'calc_year': cal_yr})
+        factors = pd.DataFrame({'aanspraak_id': ins_id,
+                                'geslacht': sex_in,
+                                'calc_year': cal_yr,
+                                'pensioenlfd': self.pension_age})
 
         factors['tar'] = factors.apply(lambda row: self.pv(row['calc_year'],
                                        self.pension_age,
-                                       row['sex_insured'],
+                                       row['geslacht'],
                                        self.pension_age,
-                                       row['insurance_id'],
+                                       row['aanspraak_id'],
                                        intrest), axis=1)
         return factors
 
@@ -230,7 +231,7 @@ def present_value(cfs, intrest=2.5):
     """
 
     if isinstance(intrest, pd.Series):
-        intrest = intrest.values()
+        intrest = intrest.values
     n = len(cfs)
     yearnr = np.arange(n)
     v = 1 / (1 + intrest/100.)**yearnr
