@@ -14,14 +14,14 @@ abs_file_path = os.path.join(main_dir, TESTDATA)
 
 tab = Tableau(xlswb=abs_file_path, nsimuls=1, maxyears=1)
 pwc = pd.read_excel(abs_file_path, sheet_name='test_waarden')
-tar_AG2014_67 = main_dir + '/tar_AG2014_op_pensioendatum.csv'
+# tar_AG2014_67 = main_dir + '/tar_AG2014_op_pensioendatum.csv'
 
 
 # ------ test add_summary----------------------------------------------
 
 def test_add_summary():
 
-    summary = tab.add_summary(tar_AG2014_67)
+    summary = tab.add_summary()
 
     cols = ['projectie_op',
             'projectie_op_wg',

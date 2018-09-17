@@ -7,7 +7,7 @@ from load import read_xlswb
 from settings import XLSWB, AGE_ADJUSTMENT
 from utils import (calculate_cumulative_index,
                    calculate_cumulative_index_conjugate,
-                   get_tar_at_pensiondate)
+                   get_tar_at_pensiondate, modulo_map)
 from vectorize import (pensiondate, future_service_years,
                        past_service_years, total_service_years,
                        nprojection_years, age, ft_base,
@@ -106,24 +106,37 @@ class Tableau:
         """ Add increments like inflation, intrest, return etc.
         """
         # merge (cumulative) indices into tableau
+        tab['simulnr_cpy'] = tab.simulnr
 
         # inflation
-        tab = tab.join(self.data.lookup_inflation, on='BOY')
+        n = self.data.lookup_inflation.index.get_level_values('simulnr').max()
+        tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
+        tab = tab.join(self.data.lookup_inflation, on=['BOY', 'simulnr'])
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_prijsinflatie_primo_idx'] = (
           grouped['pct_prijsinflatie_primo'].apply(calculate_cumulative_index)
           )
+        tab['simulnr'] = tab.simulnr_cpy
 
         # salary increase
-        tab = tab.join(self.data.lookup_salincrease, on='leeftijd_low')
+        n = (self.data.lookup_salincrease.index.
+             get_level_values('simulnr').max())
+        tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
+        tab = tab.join(self.data.lookup_salincrease,
+                       on=['leeftijd_low', 'simulnr'])
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_salstijging_primo_idx'] = (
           grouped['pct_salstijging_primo'].apply(calculate_cumulative_index)
           )
+        tab['simulnr'] = tab.simulnr_cpy
 
         # indexation (actives)
+        n = (self.data.lookup_indexation.index.
+             get_level_values('simulnr').max())
+        tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
+
         lookup_indexation_actives = self.data.lookup_indexation.loc['actief']
-        tab = tab.join(lookup_indexation_actives, on='BOY')
+        tab = tab.join(lookup_indexation_actives, on=['BOY', 'simulnr'])
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_indexatie_primo_idx'] = (
             grouped['pct_indexatie_primo'].
@@ -138,7 +151,7 @@ class Tableau:
           self.data.lookup_indexation.loc['inactief']
           )
         tab = tab.join(lookup_indexation_inactives,
-                       on='BOY', rsuffix='_inactief')
+                       on=['BOY', 'simulnr'], rsuffix='_inactief')
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_indexatie_primo_inactief_idx'] = (
             grouped['pct_indexatie_primo_inactief'].
@@ -147,24 +160,33 @@ class Tableau:
         tab['pct_indexatie_primo_inactief_idx_shifted'] = (
           grouped['pct_indexatie_primo_inactief_idx'].shift().fillna(1)
           )
+        tab['simulnr'] = tab.simulnr_cpy
 
         # intrest
-        tab = tab.join(self.data.lookup_intrest, on='BOY')
+        n = (self.data.lookup_intrest.index.
+             get_level_values('simulnr').max())
+        tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
+        tab = tab.join(self.data.lookup_intrest, on=['BOY', 'simulnr'])
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_rente_ultimo_idx'] = (
             grouped['pct_rente_ultimo'].apply(calculate_cumulative_index))
         tab['pct_rente_ultimo_idx_shifted'] = (
           grouped['pct_rente_ultimo_idx'].shift().fillna(1)
           )
+        tab['simulnr'] = tab.simulnr_cpy
 
         # return
-        tab = tab.join(self.data.lookup_return, on='leeftijd_low')
+        n = (self.data.lookup_return.index.
+             get_level_values('simulnr').max())
+        tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
+        tab = tab.join(self.data.lookup_return, on=['leeftijd_low', 'simulnr'])
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_rendement_ultimo_idx'] = (
             grouped['pct_rendement_ultimo'].apply(calculate_cumulative_index))
         tab['pct_rendement_ultimo_idx_shifted'] = (
           grouped['pct_rendement_ultimo_idx'].shift().fillna(1)
           )
+        tab['simulnr'] = tab.simulnr_cpy
 
         # nqx
         cols = ['geslacht', 'leeftijd0_adjusted', 'leeftijd_low_adjusted']
@@ -182,6 +204,9 @@ class Tableau:
         cols = ['aanspraak', 'geslacht', 'leeftijd_low']
         tab = tab.join(self.data.lookup_tariff, on=cols)
         return tab
+
+        # reset simulnr column
+        # tab.drop('simulnr_cpy', inplace=True, axis=1)
 
     def _run_projections(self, tab):
         """ Add benefit projections to tableau
@@ -344,17 +369,22 @@ class Tableau:
         tableau = self._lookup_increments(tableau)
         return self._run_projections(tableau)
 
-    def add_summary(self, tar_at_pensiondate):
+    def long_to_wide(self, df, default=True):
+        if default:
+            wide_format = df.swaplevel(i=2, j=3).unstack()
+        else:
+            wide_format = df.swaplevel(i=2, j=4).unstack()
+        wide_format.columns = wide_format.columns.droplevel()
+        wide_format.rename(index=str, columns={"OPLL": "tar_OPLL",
+                                               "NPLLRS": "tar_NPLLRS"},
+                           inplace=True)
+        return wide_format
+
+    def add_summary(self):
         """ Return summary containing 1 benefit projection (capital or
         OP/NP) per employee/plan/simulation.
-
-        Parameters
-        ----------
-            tar_at_pensiondate : string of filename like
-            '...Desktop/tar_AG2014_op_pensioendatum.csv'
-
         """
-        infile = tar_at_pensiondate
+        infile = self.data.lookup_tar_at_pensionage
 
         # 1) start with tableau
         data = self.tableau
@@ -366,12 +396,21 @@ class Tableau:
                         (data.aanspraak.isin(accrual_claims))].copy()
 
         # 3) get tarief at pension date (long format)
-        tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=True)
+        # tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=True)
+        tar_at_pd = infile
 
         # 4) calculate value per claim at pension date
         filtered['pensioenlfd'] = filtered.pensioenlfd.astype(int)
-        filtered = filtered.join(tar_at_pd, on=['geslacht', 'leeftijd0',
-                                                'pensioenlfd', 'aanspraak'])
+        # filtered = filtered.join(tar_at_pd, on=['geslacht', 'leeftijd0',
+        #                                        'pensioenlfd', 'aanspraak'])
+        n = (self.data.lookup_tar_at_pensionage.index.
+             get_level_values('simulnr').max())
+        filtered['simulnr'] = filtered.simulnr_cpy.map(lambda x:
+                                                       modulo_map(x, n))
+
+        filtered = filtered.join(tar_at_pd, on=['pensioenlfd', 'geslacht',
+                                                'aanspraak', 'leeftijd0',
+                                                'simulnr'])
         filtered['tar'] = filtered.tar.fillna(1)
         is_db = filtered.aanspraak.isin(['OPLL', 'NPLLRS'])
         filtered['capital'] = (is_db * filtered.tar *
@@ -406,9 +445,26 @@ class Tableau:
 
         # 6) lookup tarief (tar_op and tar_np) at pension date (use wide
         # format)
-        tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=False)
-        summary = summary.join(tar_at_pd, on=['geslacht',
-                                              'leeftijd0', 'pensioenlfd'])
+        # tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=False)
+        wide_tar_at_pd = self.long_to_wide(tar_at_pd, default=False)
+        summary['pensioenlfd'] = summary.pensioenlfd.astype('int')
+        summary['leeftijd0'] = summary.leeftijd0.astype('int')
+
+        # ==== Yes, I know: this is rediculous! ===================
+        current_index = wide_tar_at_pd.index.names
+        wide_tar_at_pd = wide_tar_at_pd.reset_index()
+        wide_tar_at_pd['pensioenlfd'] = (wide_tar_at_pd.pensioenlfd.
+                                         astype('int'))
+        wide_tar_at_pd['leeftijd'] = wide_tar_at_pd.leeftijd.astype('int')
+        wide_tar_at_pd['simulnr'] = wide_tar_at_pd.simulnr.astype('int')
+        wide_tar_at_pd = wide_tar_at_pd.set_index(current_index)
+        # ========================================================
+
+        summary = summary.join(wide_tar_at_pd, on=['pensioenlfd',
+                                                   'geslacht',
+                                                   'simulnr',
+                                                   'leeftijd0'
+                                                   ])
 
         # 7) calculate
         combi_factor_100_70 = summary.tar_OPLL + 0.70 * summary.tar_NPLLRS

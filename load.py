@@ -4,6 +4,7 @@ pension plans and various lookup tables
 """
 import pandas as pd
 from collections import namedtuple
+from utils import stack_lookup_table
 
 
 def read_xlswb(xlswb):
@@ -18,7 +19,8 @@ def read_xlswb(xlswb):
                                'tbl_pension_plan', 'lookup_inflation',
                                'lookup_salincrease', 'lookup_indexation',
                                'lookup_intrest', 'lookup_return',
-                               'lookup_combi', 'lookup_nqx', 'lookup_tariff'])
+                               'lookup_tar_at_pensionage', 'lookup_nqx',
+                               'lookup_tariff'])
 
     # ---------- read data ------------------------------------------
     print('Reading data ...',)
@@ -60,12 +62,15 @@ def read_xlswb(xlswb):
     # tbl_assumptie.prijsinflatie_id) & index on jaar
     print('lookup_prijsinflatie')
     lookup_inflation = pd.read_excel(xlswb,
-                                     sheet_name='lookup_prijsinflatie')
+                                     sheet_name='lookup_prijsinflatie',
+                                     converters={'jaar': int})
     selection = (lookup_inflation.omschrijving_id ==
                  tbl_assumption.prijsinflatie_id.values[0])
     lookup_inflation = (lookup_inflation[selection].
                         drop(labels='omschrijving_id', axis=1))
     lookup_inflation.set_index('jaar', inplace=True)
+    lookup_inflation = stack_lookup_table(lookup_inflation,
+                                          colname='pct_prijsinflatie_primo')
 
     # lookup_salarisstijging : read (omschrijving_id ==
     # tbl_assumptie.salarisstijging_id) & index on leeftijd
@@ -76,6 +81,8 @@ def read_xlswb(xlswb):
     lookup_salincrease = (lookup_salincrease[selection].
                           drop(labels='omschrijving_id', axis=1))
     lookup_salincrease.set_index('leeftijd', inplace=True)
+    lookup_salincrease = stack_lookup_table(lookup_salincrease,
+                                            colname='pct_salstijging_primo')
 
     # lookup_indexatie : read (omschrijving_id ==
     # tbl_assumptie.indexatie_id) & index on (status, jaar)
@@ -87,6 +94,8 @@ def read_xlswb(xlswb):
     lookup_indexation = (lookup_indexation[selection].
                          drop(labels='omschrijving_id', axis=1))
     lookup_indexation.set_index(['status', 'jaar'], inplace=True)
+    lookup_indexation = stack_lookup_table(lookup_indexation,
+                                           colname='pct_indexatie_primo')
 
     # lookup_rente : read (omschrijving_id ==
     # tbl_assumptie.rente_id) & index on jaar
@@ -97,6 +106,8 @@ def read_xlswb(xlswb):
     lookup_intrest = (lookup_intrest[selection].
                       drop(labels='omschrijving_id', axis=1))
     lookup_intrest.set_index('jaar', inplace=True)
+    lookup_intrest = stack_lookup_table(lookup_intrest,
+                                        colname='pct_rente_ultimo')
 
     # lookup_rendement : read (omschrijving_id ==
     # tbl_assumptie.rendement_id) & index on leeftijd
@@ -107,16 +118,26 @@ def read_xlswb(xlswb):
     lookup_return = (lookup_return[selection].
                      drop(labels='omschrijving_id', axis=1))
     lookup_return.set_index('leeftijd', inplace=True)
+    lookup_return = stack_lookup_table(lookup_return,
+                                       colname='pct_rendement_ultimo')
 
-    # lookup_combifactor : read (omschrijving_id ==
-    # tbl_assumptie.combifactor_id) & index on leeftijd (geslacht, leeftijd)
-    print('lookup_combifactor')
-    lookup_combi = pd.read_excel(xlswb, sheet_name='lookup_combifactor')
-    selection = (lookup_combi.omschrijving_id ==
-                 tbl_assumption.combifactor_id.values[0])
-    lookup_combi = (lookup_combi[selection].
-                    drop(labels='omschrijving_id', axis=1))
-    lookup_combi.set_index(['geslacht', 'leeftijd'], inplace=True)
+    # lookup_tar_at_pensionage : read (omschrijving_id ==
+    # tbl_assumptie.tar_at_pensionage_id) &
+    # index on leeftijd (*pensioenlfd*, geslacht, *aanspraak_id*, leeftijd)
+    print('lookup_tar_at_pensionage')
+    lookup_tar_at_pensionage =(
+      pd.read_excel(xlswb, sheet_name='lookup_tar_at_pensionage',
+                    converters={'pensioenlfd': int, 'leeftijd': int})
+      )
+    selection = (lookup_tar_at_pensionage.omschrijving_id ==
+                 tbl_assumption.tar_at_pensionage_id.values[0])
+    lookup_tar_at_pensionage = (lookup_tar_at_pensionage[selection].
+                                drop(labels='omschrijving_id', axis=1))
+    lookup_tar_at_pensionage.set_index(['pensioenlfd', 'geslacht',
+                                        'aanspraak_id', 'leeftijd'],
+                                       inplace=True)
+    lookup_tar_at_pensionage = stack_lookup_table(lookup_tar_at_pensionage,
+                                                  colname='tar')
 
     # lookup_nqx : read (omschrijving_id ==
     # tbl_assumptie.nqx_id) & index on (geslacht, lfd_huidig, leeftijd)
@@ -144,6 +165,6 @@ def read_xlswb(xlswb):
     data = Data(tbl_employee, tbl_assumption, tbl_pension_plan,
                 lookup_inflation, lookup_salincrease,
                 lookup_indexation, lookup_intrest, lookup_return,
-                lookup_combi, lookup_nqx, lookup_tariff)
+                lookup_tar_at_pensionage, lookup_nqx, lookup_tariff)
 
     return data

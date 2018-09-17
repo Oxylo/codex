@@ -236,3 +236,30 @@ def present_value(cfs, intrest=2.5):
     yearnr = np.arange(n)
     v = 1 / (1 + intrest/100.)**yearnr
     return sum(v * cfs)
+
+
+def stack_lookup_table(df, colname='value'):
+    """ Converts lookup table to long format for performing easy lookups
+    """
+    if len(df.columns) > 1:
+        df.columns.name = 'simulnr'
+        stacked = df.stack()
+        stacked = pd.DataFrame(stacked, columns=[colname])
+        # here we have to so some wranging to make sure index
+        # simulnr is casted to int
+        current_index = list(stacked.index.names)
+        stacked = stacked.reset_index()
+        stacked['simulnr'] = stacked.simulnr.astype('int')
+        stacked = stacked.set_index(current_index)
+        return stacked
+    else:
+        df['simulnr'] = 1
+        return df.set_index('simulnr', append=True)
+
+
+def modulo_map(x, n):
+    """ Maps any positive int to int in (1, 2, .... n})
+    """
+    return (x - 1)%n + 1
+
+
