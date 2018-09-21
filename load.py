@@ -4,7 +4,7 @@ pension plans and various lookup tables
 """
 import pandas as pd
 from collections import namedtuple
-from utils import stack_lookup_table
+from utils import stack_lookup_table, calculate_portfolio_return
 
 
 def read_xlswb(xlswb):
@@ -18,9 +18,10 @@ def read_xlswb(xlswb):
     Data = namedtuple('Data', ['tbl_employee', 'tbl_assumption',
                                'tbl_pension_plan', 'lookup_inflation',
                                'lookup_salincrease', 'lookup_indexation',
-                               'lookup_intrest', 'lookup_return',
+                               'lookup_intrest', 'lookup_lifecycle',
+                               'lookup_return_stocks', 'lookup_return_bonds',
                                'lookup_tar_at_pensionage', 'lookup_nqx',
-                               'lookup_tariff'])
+                               'lookup_tariff', 'lookup_return'])
 
     # ---------- read data ------------------------------------------
     print('Reading data ...',)
@@ -109,17 +110,45 @@ def read_xlswb(xlswb):
     lookup_intrest = stack_lookup_table(lookup_intrest,
                                         colname='pct_rente_ultimo')
 
-    # lookup_rendement : read (omschrijving_id ==
-    # tbl_assumptie.rendement_id) & index on leeftijd
-    print('lookup_rendement')
-    lookup_return = pd.read_excel(xlswb, sheet_name='lookup_rendement')
-    selection = (lookup_return.omschrijving_id ==
-                 tbl_assumption.rendement_id.values[0])
-    lookup_return = (lookup_return[selection].
-                     drop(labels='omschrijving_id', axis=1))
-    lookup_return.set_index('leeftijd', inplace=True)
-    lookup_return = stack_lookup_table(lookup_return,
-                                       colname='pct_rendement_ultimo')
+    # lookup_lifecycle: read (omschrijving_id ==
+    # tbl_assumptie.lifecycle_id) & index on leeftijd
+    print('lookup_lifecycle')
+    lookup_lifecycle = (
+      pd.read_excel(xlswb, sheet_name='lookup_lifecycle')
+      )
+    selection = (lookup_lifecycle.omschrijving_id ==
+                 tbl_assumption.lifecycle_id.values[0])
+    lookup_lifecycle = (lookup_lifecycle[selection].
+                        drop(labels='omschrijving_id', axis=1))
+    lookup_lifecycle.set_index('leeftijd', inplace=True)
+
+    # lookup_rendement_aandelen : read (omschrijving_id ==
+    # tbl_assumptie.rendement_aandelen_id) & index on jaar
+    print('lookup_rendement_aandelen')
+    lookup_return_stocks = (
+      pd.read_excel(xlswb, sheet_name='lookup_rendement_aandelen')
+      )
+    selection = (lookup_return_stocks.omschrijving_id ==
+                 tbl_assumption.rendement_aandelen_id.values[0])
+    lookup_return_stocks = (lookup_return_stocks[selection].
+                            drop(labels='omschrijving_id', axis=1))
+    lookup_return_stocks.set_index('jaar', inplace=True)
+    lookup_return_stocks = stack_lookup_table(lookup_return_stocks,
+                                              colname='pct_rendement_aandelen')
+
+    # lookup_rendement_obligaties : read (omschrijving_id ==
+    # tbl_assumptie.rendement_obligaties_id) & index on jaar
+    print('lookup_rendement_obligaties')
+    lookup_return_bonds = (
+      pd.read_excel(xlswb, sheet_name='lookup_rendement_obligaties')
+      )
+    selection = (lookup_return_bonds.omschrijving_id ==
+                 tbl_assumption.rendement_obligaties_id.values[0])
+    lookup_return_bonds = (lookup_return_bonds[selection].
+                           drop(labels='omschrijving_id', axis=1))
+    lookup_return_bonds.set_index('jaar', inplace=True)
+    lookup_return_bonds = stack_lookup_table(lookup_return_bonds,
+                                             colname='pct_rendement_obligaties')
 
     # lookup_tar_at_pensionage : read (omschrijving_id ==
     # tbl_assumptie.tar_at_pensionage_id) &
@@ -162,9 +191,19 @@ def read_xlswb(xlswb):
                             inplace=True)
     print('OK')
 
+    # ----convert lifecycle, stocks/bond returns to portfolio returns -------
+
+    lookup_return = calculate_portfolio_return(lookup_lifecycle,
+                                               lookup_return_stocks,
+                                               lookup_return_bonds)
+
+    # -----------------------------------------------------------------------
+
     data = Data(tbl_employee, tbl_assumption, tbl_pension_plan,
                 lookup_inflation, lookup_salincrease,
-                lookup_indexation, lookup_intrest, lookup_return,
-                lookup_tar_at_pensionage, lookup_nqx, lookup_tariff)
+                lookup_indexation, lookup_intrest,
+                lookup_lifecycle, lookup_return_stocks,
+                lookup_return_bonds, lookup_tar_at_pensionage,
+                lookup_nqx, lookup_tariff, lookup_return)
 
     return data

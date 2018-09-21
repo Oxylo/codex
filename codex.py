@@ -179,7 +179,8 @@ class Tableau:
         n = (self.data.lookup_return.index.
              get_level_values('simulnr').max())
         tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
-        tab = tab.join(self.data.lookup_return, on=['leeftijd_low', 'simulnr'])
+        tab = tab.join(self.data.lookup_return,
+                       on=['leeftijd0', 'BOY', 'simulnr'])
         grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
         tab['pct_rendement_ultimo_idx'] = (
             grouped['pct_rendement_ultimo'].apply(calculate_cumulative_index))
@@ -403,6 +404,9 @@ class Tableau:
         filtered['pensioenlfd'] = filtered.pensioenlfd.astype(int)
         # filtered = filtered.join(tar_at_pd, on=['geslacht', 'leeftijd0',
         #                                        'pensioenlfd', 'aanspraak'])
+
+        filtered['simulnr_cpy'] = filtered.simulnr
+
         n = (self.data.lookup_tar_at_pensionage.index.
              get_level_values('simulnr').max())
         filtered['simulnr'] = filtered.simulnr_cpy.map(lambda x:

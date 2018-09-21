@@ -263,3 +263,42 @@ def modulo_map(x, n):
     return (x - 1)%n + 1
 
 
+def calculate_portfolio_return(lifecycle, stocks, bonds):
+    """ Return portfiolio return combining LC, stocks, bonds
+
+    Parameters
+    ----------
+        lifecycle : lookup table indexed by leeftijd
+        stocks    : lookup table indexed by jaar
+        bonds     : lookup table indexed by jaar
+
+    Return
+    ------
+        lookup_table_return : lookup table indexed by leeftijd, jaar, simulnr
+
+    """
+    # construct new df
+    lifecycle['tmp'] = 1
+    stocks['tmp'] = 1
+
+    df = pd.merge(lifecycle.reset_index(),
+                  stocks.reset_index(), on='tmp')
+    lifecycle.drop('tmp', inplace=True, axis=1)
+    stocks.drop('tmp', inplace=True, axis=1)
+
+    df = df[['leeftijd', 'jaar', 'simulnr']]
+    max_age = lifecycle.reset_index().leeftijd.max()
+    df = df[df.leeftijd + df.jaar <= max_age + 1]
+
+    # join lifecycle & returns stocks & bonds into df
+    df['future_age'] = df.leeftijd + df.jaar - 1
+    df = df.join(lifecycle, on='future_age')
+    df = df.join(stocks, on=['jaar', 'simulnr'])
+    df = df.join(bonds, on=['jaar', 'simulnr'])
+    df['pct_rendement_ultimo'] = (
+        df.pct_aandelen * df.pct_rendement_aandelen +
+        (1 - df.pct_aandelen) * df.pct_rendement_obligaties
+        )
+    df.drop('future_age', inplace=True, axis=1)
+    return df.set_index(['leeftijd', 'jaar', 'simulnr'])
+
