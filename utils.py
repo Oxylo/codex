@@ -293,8 +293,18 @@ def calculate_portfolio_return(lifecycle, stocks, bonds):
     # join lifecycle & returns stocks & bonds into df
     df['future_age'] = df.leeftijd + df.jaar - 1
     df = df.join(lifecycle, on='future_age')
+
+    df['simulnr_cpy'] = df.simulnr
+    n = stocks.index.get_level_values('simulnr').max()
+    df['simulnr'] = df.simulnr_cpy.map(lambda x: modulo_map(x, n))
     df = df.join(stocks, on=['jaar', 'simulnr'])
+
+    n = bonds.index.get_level_values('simulnr').max()
+    df['simulnr'] = df.simulnr_cpy.map(lambda x: modulo_map(x, n))
     df = df.join(bonds, on=['jaar', 'simulnr'])
+    df['simulnr'] = df.simulnr_cpy
+    df.drop('simulnr_cpy', inplace=True, axis=1)
+
     df['pct_rendement_ultimo'] = (
         df.pct_aandelen * df.pct_rendement_aandelen +
         (1 - df.pct_aandelen) * df.pct_rendement_obligaties
