@@ -202,7 +202,7 @@ class Tableau:
           )
 
         # tariff
-        cols = ['aanspraak', 'geslacht', 'leeftijd_low']
+        cols = ['tarief_id', 'aanspraak', 'geslacht', 'leeftijd_low']
         tab = tab.join(self.data.lookup_tariff, on=cols)
         return tab
 

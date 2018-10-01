@@ -183,12 +183,14 @@ def read_xlswb(xlswb):
     # & index on leeftijd (aanspraak, geslacht, leeftijd)
     print('lookup_tarief')
     lookup_tariff = pd.read_excel(xlswb, sheet_name='lookup_tarief')
-    selection = (lookup_tariff.omschrijving_id ==
-                 tbl_assumption.tarief_id.values[0])
-    lookup_tariff = (lookup_tariff[selection].
-                     drop(labels='omschrijving_id', axis=1))
-    lookup_tariff.set_index(['aanspraak', 'geslacht', 'leeftijd'],
-                            inplace=True)
+
+    # selection = (lookup_tariff.omschrijving_id ==
+    #             tbl_assumption.tarief_id.values[0])
+    # lookup_tariff = (lookup_tariff[selection].
+    #                  drop(labels='omschrijving_id', axis=1))
+    # Now, we also include omschrijving_id in the index!
+    lookup_tariff.set_index(['omschrijving_id', 'aanspraak',
+                             'geslacht', 'leeftijd'], inplace=True)
     print('OK')
 
     # ----convert lifecycle, stocks/bond returns to portfolio returns -------
