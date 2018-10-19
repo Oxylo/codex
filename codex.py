@@ -4,7 +4,7 @@ Module for actuarial projections
 import numpy as np
 import pandas as pd
 from load import read_xlswb
-from settings import XLSWB, AGE_ADJUSTMENT
+from settings import XLSWB
 from utils import (calculate_cumulative_index,
                    calculate_cumulative_index_conjugate,
                    get_tar_at_pensiondate, modulo_map)
@@ -96,10 +96,11 @@ class Tableau:
         tab['tsy'] = total_service_years(tab.psy0, tab.fsy0)
         tab['fsy'] = tab['fsy0'] - tab['BOY'] + 1
         tab['leeftijd0'] = age(tab.pensioenlfd, tab.fsy0).astype(int)
-        tab['leeftijd0_adjusted'] = tab.leeftijd0 + AGE_ADJUSTMENT
+        tab['leeftijd0_adjusted'] = tab.leeftijd0 + assumption.age_adjustment
         tab['leeftijd'] = age(tab.pensioenlfd, tab.fsy)
         tab['leeftijd_low'] = tab.leeftijd.values.astype(int)
-        tab['leeftijd_low_adjusted'] = tab.leeftijd_low + AGE_ADJUSTMENT
+        tab['leeftijd_low_adjusted'] = (tab.leeftijd_low +
+                                        assumption.age_adjustment)
         return tab
 
     def _lookup_increments(self, tab):
@@ -338,7 +339,9 @@ class Tableau:
         tab['pct_staffel'] = c * tab.tarief_primo * tab.percentage
         tab['eur_premie_dc'] = (c * tab.pro_rata * tab.pct_staffel *
                                 tab.pt_pensioengrondslag)
-        cf_timing_factor = ((1 + 0.5 * tab.pct_rendement_ultimo) /
+        timing_investments = 1 - assumption.timing_belegging
+        cf_timing_factor = ((1 + timing_investments *
+                             tab.pct_rendement_ultimo) /
                             (1 + tab.pct_rendement_ultimo))
         tab['discount_varl'] = (c * tab.eur_premie_dc * cf_timing_factor *
                                 tab.nqx_primo_idx_shifted /

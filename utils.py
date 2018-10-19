@@ -232,10 +232,16 @@ def present_value(cfs, intrest=2.5):
 
     if isinstance(intrest, pd.Series):
         intrest = intrest.values
-    n = len(cfs)
-    yearnr = np.arange(n)
-    v = 1 / (1 + intrest/100.)**yearnr
-    return sum(v * cfs)
+        n = min(len(intrest), len(cfs))
+        yearnr = np.arange(n)
+        v = 1 / (1 + intrest[:n]/100.)**yearnr
+
+    if isinstance(intrest, int):
+        n = len(cfs)
+        yearnr = np.arange(n)
+        v = 1 / (1 + intrest/100.)**yearnr
+
+    return sum(v * cfs[:n])
 
 
 def stack_lookup_table(df, colname='value'):
