@@ -113,7 +113,8 @@ class Tableau:
         n = self.data.lookup_inflation.index.get_level_values('simulnr').max()
         tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
         tab = tab.join(self.data.lookup_inflation, on=['BOY', 'simulnr'])
-        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
+        # PJM : simulnr --> simulnr_cpy
+        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr_cpy'])
         tab['pct_prijsinflatie_primo_idx'] = (
           grouped['pct_prijsinflatie_primo'].apply(calculate_cumulative_index)
           )
@@ -125,7 +126,8 @@ class Tableau:
         tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
         tab = tab.join(self.data.lookup_salincrease,
                        on=['leeftijd_low', 'simulnr'])
-        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
+        # PJM
+        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr_cpy'])
         tab['pct_salstijging_primo_idx'] = (
           grouped['pct_salstijging_primo'].apply(calculate_cumulative_index)
           )
@@ -138,7 +140,8 @@ class Tableau:
 
         lookup_indexation_actives = self.data.lookup_indexation.loc['actief']
         tab = tab.join(lookup_indexation_actives, on=['BOY', 'simulnr'])
-        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
+        # PJM
+        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr_cpy'])
         tab['pct_indexatie_primo_idx'] = (
             grouped['pct_indexatie_primo'].
             apply(calculate_cumulative_index)
@@ -168,7 +171,8 @@ class Tableau:
              get_level_values('simulnr').max())
         tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
         tab = tab.join(self.data.lookup_intrest, on=['BOY', 'simulnr'])
-        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
+        # PJM
+        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr_cpy'])
         tab['pct_rente_ultimo_idx'] = (
             grouped['pct_rente_ultimo'].apply(calculate_cumulative_index))
         tab['pct_rente_ultimo_idx_shifted'] = (
@@ -182,7 +186,8 @@ class Tableau:
         tab['simulnr'] = tab.simulnr_cpy.map(lambda x: modulo_map(x, n))
         tab = tab.join(self.data.lookup_return,
                        on=['leeftijd0', 'BOY', 'simulnr'])
-        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr'])
+        # PJM
+        grouped = tab.groupby(['id', 'regeling_id', 'aanspraak', 'simulnr_cpy'])
         tab['pct_rendement_ultimo_idx'] = (
             grouped['pct_rendement_ultimo'].apply(calculate_cumulative_index))
         tab['pct_rendement_ultimo_idx_shifted'] = (
@@ -414,10 +419,10 @@ class Tableau:
              get_level_values('simulnr').max())
         filtered['simulnr'] = filtered.simulnr_cpy.map(lambda x:
                                                        modulo_map(x, n))
-
+        # PJM
         filtered = filtered.join(tar_at_pd, on=['pensioenlfd', 'geslacht',
                                                 'aanspraak', 'leeftijd0',
-                                                'simulnr'])
+                                                'simulnr_cpy'])
         filtered['tar'] = filtered.tar.fillna(1)
         is_db = filtered.aanspraak.isin(['OPLL', 'NPLLRS'])
         filtered['capital'] = (is_db * filtered.tar *
