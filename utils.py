@@ -318,3 +318,83 @@ def calculate_portfolio_return(lifecycle, stocks, bonds):
     df.drop('future_age', inplace=True, axis=1)
     return df.set_index(['leeftijd', 'jaar', 'simulnr'])
 
+
+def max_percentage_difference(df, test_cols, calculated_cols):
+    """ Return percentage maximum difference between test_cols and calculated_cols
+
+    Parameters
+    ----------
+    df              : DataFrame
+        contains columns to be compared
+    test_cols       : list of str
+    calculated_cols : list of str
+
+    Returns
+    -------
+    max_pct_difference  : float
+        max. % difference (between 0 and 100)
+    """
+    test_values = df[test_cols].values
+    calculated_values = df[calculated_cols].values
+    deltas = test_values - calculated_values
+    pct_deltas = np.divide(deltas, test_values, where=test_values!=0)
+    return 100 * np.max(np.abs(pct_deltas))
+
+
+def compare(df, test_cols, calculated_cols):
+    """ Compares indicated colums elementwise
+
+    Parameters
+    ----------
+    df        : DataFrame
+    test_cols : list of str
+    calculated_cols : list of str
+
+    Returns
+    -------
+    result    : DataFrame
+        long format, sorted by pct_diff in descending order
+
+
+    Example
+    -------
+    >>> df = pd.DataFrame({'a': [10, 20, 30],
+                           'b': [ 9, 21, 29],
+                           'c': [85, 70, 90],
+                           'd': [86, 71, 91]},
+                 index=pd.MultiIndex.from_tuples([(1, 1), (1, 2), (2, 1)]))
+    >>> df.index.set_names(['idx1', 'idx2'], inplace=True)
+    >>> result = compare(df, ['a', 'c'], ['b', 'd'])
+    >>> result.rename(index=str, columns={'test_col': 'tc',
+                                          'calculated_col': 'cc',
+                                          'test_value': 'tv',
+                                          'calculated_value': 'cv',
+                                          'pct_diff': '%d'})
+
+    >>>                tc  cc  tv  cv  %d
+        idx1    idx2
+           1       1   a   b   10  9   10.00
+           1       2   a   b   20  21  5.00
+           2       1   a   b   30  29  3.33
+           1       2   c   d   70  71  1.43
+           1       1   c   d   85  86  1.18
+           2       1   c   d   90  91  1.11
+    """
+    test_values = df[test_cols].stack()
+    calculated_values = df[calculated_cols].stack()
+    test_levels = test_values.index.get_level_values(-1)
+    calculated_levels = calculated_values.index.get_level_values(-1)
+    result = pd.DataFrame([test_levels, calculated_levels,
+                           test_values.values, calculated_values.values],
+                          index=['test_col', 'calculated_col', 'test_value',
+                                 'calculated_value']).T
+
+    new_index = test_values.index.droplevel(-1)
+    result.set_index(new_index, inplace=True)
+    pct_diff = (lambda x, y: np.abs(x - y) if y == 0
+                else 100 * np.abs((x - y) / y))
+    result['pct_diff'] = np.vectorize(pct_diff)(
+        result.calculated_value, result.test_value)
+    result.sort_values(by='pct_diff', ascending=False, inplace=True)
+    result['pct_diff'] = result.pct_diff.map(lambda x: round(x, 2))
+    return result

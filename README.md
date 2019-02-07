@@ -4,16 +4,28 @@ Actuarial library for benefit projections and simulations
 Installation (local)
 ====================
 
-    $ git clone https://github.com/Oxylo/CODEX3.git codex3
+    $ git clone https://github.com/Oxylo/codex.git my_project_name
     $ pip install -r requirements.txt
     
     
-Run program (inside python CLI or Jupyter)
-==========================================
+Example
+=======
 
     >>> from codex import Tableau
     >>> tab = Tableau()
-    >>> my_tableau = tab.tableau
+    >>> detailed_output = tab.tableau
+    >>> summary = tab.add_summary()
+
+
+Tests
+=====
+
+    $ cd codex
+    $ pytest -s tests/test_pwc.py
+    $ pytest -s tests/test_wtw.py
+    $ pytest -s tests/test_wtw_incl_scenarios.py
+    $ pytest # run all 3 tests (this can take a while, please be patient!)
+
 
 
 Note: 

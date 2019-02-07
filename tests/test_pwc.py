@@ -1,90 +1,44 @@
+"""
+Compare codex results with PwC
+"""
+
 import os
 import pandas as pd
-import sys
-import pytest
+from utils import compare
 from codex import Tableau
 
-# ----- fixtures ------------------------------------------------------
+# ----- settings for this test ----------------------------------------
 
-TESTDATA = 'codex_test_data_db.xlsx'
-MAXERROR = 0.25  # THRESHOLD = 0.25 percent
+TESTDATA = 'codex_test_data_pwc.xlsx'
+MAXERROR = 0.25  # Absolute difference must be less than 0.25 percent
+TEST_COLS = ['pwc_projectie_op_plus_pv_aow', 'pwc_eigen_bijdrage0',
+             'xls_projectie_op_wg',  'xls_projectie_op_wn']
+CALCULATED_COLS = ['projectie_op_plus_pv_aow', 'eigen_bijdrage0',
+                   'projectie_op_wg',  'projectie_op_wn']
+MERGE_INDEX = ['regeling_id', 'deelnemer_id']
+NSIMULS = 1
+
+# ----- fixtures ------------------------------------------------------
 
 main_dir = os.path.dirname(__file__)
 abs_file_path = os.path.join(main_dir, TESTDATA)
 
-tab = Tableau(xlswb=abs_file_path, nsimuls=1, maxyears=1)
-pwc = pd.read_excel(abs_file_path, sheet_name='test_waarden')
-# tar_AG2014_67 = main_dir + '/tar_AG2014_op_pensioendatum.csv'
-
+tab = Tableau(xlswb=abs_file_path, nsimuls=NSIMULS)
+test_values = pd.read_excel(abs_file_path, sheet_name='test_waarden')
 
 # ------ test add_summary----------------------------------------------
 
 def test_add_summary():
 
-    summary = tab.add_summary()
+    calculated_values = tab.add_summary()
+    merged = test_values.join(calculated_values[CALCULATED_COLS],
+                              on=MERGE_INDEX)
+    merged.set_index(MERGE_INDEX, inplace=True)
+    comp = compare(merged, TEST_COLS, CALCULATED_COLS)
 
-    cols = ['projectie_op',
-            'projectie_op_wg',
-            'projectie_op_wn',
-            'cum_eigen_bijdrage',
-            'projectie_op_plus_pv_aow',
-            'eigen_bijdrage0']
+    print('\n\n*** Top 20 differences: ***')
+    print(comp.head(20))
 
-    test_results = pwc.join(summary[cols],
-                            on=['regeling_id', 'deelnemer_id'])
-
-    test_results['verschil_op_plus_pv_aow'] = (
-        test_results.pwc_projectie_op_plus_pv_aow -
-        test_results.projectie_op_plus_pv_aow
-        )
-    condition = (test_results.pwc_projectie_op_plus_pv_aow == 0)
-    test_results['pct_verschil_op_plus_pv_aow'] = (
-        100 * (condition * 0 + (1 - condition) *
-               test_results.verschil_op_plus_pv_aow /
-               test_results.pwc_projectie_op_plus_pv_aow)
-        )
-
-    test_results['verschil_op_wg'] = (test_results.xls_projectie_op_wg -
-                                      test_results.projectie_op_wg)
-    condition = (test_results.xls_projectie_op_wg == 0)
-    test_results['pct_verschil_op_wg'] = (
-        100 * (condition * 0 + (1 - condition) *
-               test_results.verschil_op_wg / test_results.xls_projectie_op_wg)
-        )
-
-    test_results['verschil_op_wn'] = (test_results.xls_projectie_op_wn -
-                                      test_results.projectie_op_wn)
-    condition = (test_results.xls_projectie_op_wn == 0)
-    test_results['pct_verschil_op_wn'] = (
-        100 * (condition * 0 + (1 - condition) *
-               test_results.verschil_op_wn / test_results.xls_projectie_op_wn)
-        )
-
-    test_results['verschil_eigen_bijdrage0'] = (
-        test_results.pwc_eigen_bijdrage0 - test_results.eigen_bijdrage0
-        )
-    condition = (test_results.pwc_eigen_bijdrage0 == 0)
-    test_results['pct_verschil_eigen_bijdrage0'] = (
-        100 * (condition * 0 + (1 - condition) *
-               test_results.verschil_eigen_bijdrage0 / test_results.
-               pwc_eigen_bijdrage0)
-        )
-
-    test_stats = (test_results['pct_verschil_op_plus_pv_aow'].abs().max(),
-                  test_results['pct_verschil_op_wg'].abs().max(),
-                  test_results['pct_verschil_op_wn'].abs().max(),
-                  test_results['pct_verschil_eigen_bijdrage0'].abs().max())
-
-    deltas = ['regeling_id',
-              'deelnemer_id',
-              'pct_verschil_op_plus_pv_aow',
-              'pct_verschil_op_wg',
-              'pct_verschil_op_wn',
-              'pct_verschil_eigen_bijdrage0']
-
-    print('\n')
-    print(test_results[deltas])
-
-    assert (max(test_stats) < MAXERROR)
+    assert (comp.pct_diff.max() < MAXERROR)
 
 # ------ [end tests] --------------------------------------------------

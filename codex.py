@@ -428,6 +428,7 @@ class Tableau:
         filtered['capital'] = (is_db * filtered.tar *
                                filtered.tijdsevenredig +
                                (1 - is_db) * filtered.capital)
+        filtered['simulnr'] = filtered.simulnr_cpy
 
         # 5) create new df with 1 row per pension plan:
         grouped = filtered.groupby(['regeling_id', 'id', 'simulnr'])
@@ -472,11 +473,14 @@ class Tableau:
         wide_tar_at_pd = wide_tar_at_pd.set_index(current_index)
         # ========================================================
 
+        summary['simulnr_cpy'] = summary.simulnr
+        summary['simulnr'] = 1
         summary = summary.join(wide_tar_at_pd, on=['pensioenlfd',
                                                    'geslacht',
                                                    'simulnr',
                                                    'leeftijd0'
                                                    ])
+        summary['simulnr'] = summary.simulnr_cpy
 
         # 7) calculate
         combi_factor_100_70 = summary.tar_OPLL + 0.70 * summary.tar_NPLLRS
@@ -511,4 +515,5 @@ class Tableau:
                                       summary.pct_eigen_bijdrage *
                                       np.maximum(0, pension_salary -
                                                  summary.premie_franchise))
+        summary.drop(['simulnr_cpy'], axis=1, inplace=True)
         return summary
