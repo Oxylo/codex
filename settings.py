@@ -1,2 +1,2 @@
-XLSWB = '/home/pieter/projects/codex/tests/codex_test_data_db.xlsx'
+XLSWB = '/home/pieter/projects/codex/data/template.xlsx'
 PICKLED = '/home/pieter/Desktop/codex_data.pck'

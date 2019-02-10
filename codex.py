@@ -6,8 +6,7 @@ import pandas as pd
 from load import read_xlswb
 from settings import XLSWB
 from utils import (calculate_cumulative_index,
-                   calculate_cumulative_index_conjugate,
-                   get_tar_at_pensiondate, modulo_map)
+                   calculate_cumulative_index_conjugate, modulo_map)
 from vectorize import (pensiondate, future_service_years,
                        past_service_years, total_service_years,
                        nprojection_years, age, ft_base,
@@ -390,130 +389,98 @@ class Tableau:
         return wide_format
 
     def add_summary(self):
-        """ Return summary containing 1 benefit projection (capital or
-        OP/NP) per employee/plan/simulation.
+        """ Return summary: 1 record per employee x plan x simulation
         """
-        infile = self.data.lookup_tar_at_pensionage
+        tar = self.data.lookup_tar_at_pensionage
 
-        # 1) start with tableau
-        data = self.tableau
+        # create lookup table 1: 100/70 combi tarief
+        # indexed by: pensioenlfd x geslacht x leeftijd x simulnr
+        # required for: converting DC capitals to DB claim)
+        lookup_combi = tar.unstack(level='aanspraak_id')
+        lookup_combi.columns = pd.Index(['tar_NPLLRS', 'tar_OPLL'])
+        lookup_combi['tar_combi'] = (lookup_combi.tar_OPLL +
+                                     0.7 * lookup_combi.tar_NPLLRS)
 
-        # 2) filter rows where (fsy==1) & (aanspraak in ('OPLL', 'VARL',
-        # 'NPLLRS')) # TO DO: 'NPTLB', 'NPLL-O'
-        accrual_claims = ['OPLL', 'VARL', 'NPLLRS']
-        filtered = data[(data.fsy==1) &
-                        (data.aanspraak.isin(accrual_claims))].copy()
+        # create lookup table 2: capital at pension date DB plans
+        # indexed by: regeling_id x id x simulnr
+        # required for: converting DB claims to DC capital
+        db_claims = ['OPLL', 'NPLLRS']
+        db = self.tableau[(self.tableau.fsy == 1) &
+                          (self.tableau.aanspraak.isin(db_claims))]
+        selected_columns = ['regeling_id', 'id', 'pensioenlfd',
+                            'geslacht', 'leeftijd0', 'aanspraak',
+                            'simulnr', 'tijdsevenredig']
+        db = db[selected_columns].copy()
+        n = self.data.lookup_tar_at_pensionage.index.get_level_values(
+          'simulnr').max()
+        db['simulnr_tmp'] = db.simulnr.map(lambda x: modulo_map(x, n))
+        db['leeftijd0'] = db.leeftijd0.astype(np.int64)  # cast: object --> int
+        joined = db.join(tar, on=['pensioenlfd', 'geslacht', 'aanspraak',
+                                  'leeftijd0', 'simulnr_tmp'])
+        joined['capital_db'] = joined.tijdsevenredig * joined.tar
+        remove = ['pensioenlfd', 'geslacht', 'leeftijd0', 'aanspraak',
+                  'tijdsevenredig', 'tar', 'simulnr_tmp']
+        joined.drop(remove, axis=1, inplace=True)
+        grouped = joined.groupby(['regeling_id', 'id', 'simulnr'])
+        lookup_capital = grouped.sum()
 
-        # 3) get tarief at pension date (long format)
-        # tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=True)
-        tar_at_pd = infile
-
-        # 4) calculate value per claim at pension date
-        filtered['pensioenlfd'] = filtered.pensioenlfd.astype(int)
-        # filtered = filtered.join(tar_at_pd, on=['geslacht', 'leeftijd0',
-        #                                        'pensioenlfd', 'aanspraak'])
-
-        filtered['simulnr_cpy'] = filtered.simulnr
-
-        n = (self.data.lookup_tar_at_pensionage.index.
-             get_level_values('simulnr').max())
-        filtered['simulnr'] = filtered.simulnr_cpy.map(lambda x:
-                                                       modulo_map(x, n))
-        # PJM
-        filtered = filtered.join(tar_at_pd, on=['pensioenlfd', 'geslacht',
-                                                'aanspraak', 'leeftijd0',
-                                                'simulnr_cpy'])
-        filtered['tar'] = filtered.tar.fillna(1)
-        is_db = filtered.aanspraak.isin(['OPLL', 'NPLLRS'])
-        filtered['capital'] = (is_db * filtered.tar *
-                               filtered.tijdsevenredig +
-                               (1 - is_db) * filtered.capital)
-        filtered['simulnr'] = filtered.simulnr_cpy
-
-        # 5) create new df with 1 row per pension plan:
-        grouped = filtered.groupby(['regeling_id', 'id', 'simulnr'])
-        grp_name = grouped['naam'].first()
-        grp_sex = grouped['geslacht'].first()
-        grp_age0 = grouped['leeftijd0'].first()
-        grp_type = grouped['type_regeling'].first()
-        grp_memo = grouped['memo'].first()
-        grp_aow = grouped['aow'].first()
-        grp_op_pv = grouped['op_premievrij'].first()
-        grp_np_pv = grouped['np_premievrij'].first()
-        grp_cap = grouped['capital'].sum()
-        grp_contr = grouped['cum_eigen_bijdrage'].first()
-        grp_page = grouped['pensioenlfd'].first()
-
-        summary = pd.DataFrame({'naam': grp_name,
-                                'geslacht': grp_sex,
-                                'leeftijd0': grp_age0,
-                                'type_regeling': grp_type,
-                                'memo': grp_memo,
-                                'aow': grp_aow,
-                                'op_premievrij': grp_op_pv,
-                                'np_premievrij': grp_np_pv,
-                                'capital': grp_cap,
-                                'cum_eigen_bijdrage': grp_contr,
-                                'pensioenlfd': grp_page,}).reset_index()
-
-        # 6) lookup tarief (tar_op and tar_np) at pension date (use wide
-        # format)
-        # tar_at_pd = get_tar_at_pensiondate(csv_file=infile, long_format=False)
-        wide_tar_at_pd = self.long_to_wide(tar_at_pd, default=False)
-        summary['pensioenlfd'] = summary.pensioenlfd.astype('int')
-        summary['leeftijd0'] = summary.leeftijd0.astype('int')
-
-        # ==== Yes, I know: this is rediculous! ===================
-        current_index = wide_tar_at_pd.index.names
-        wide_tar_at_pd = wide_tar_at_pd.reset_index()
-        wide_tar_at_pd['pensioenlfd'] = (wide_tar_at_pd.pensioenlfd.
-                                         astype('int'))
-        wide_tar_at_pd['leeftijd'] = wide_tar_at_pd.leeftijd.astype('int')
-        wide_tar_at_pd['simulnr'] = wide_tar_at_pd.simulnr.astype('int')
-        wide_tar_at_pd = wide_tar_at_pd.set_index(current_index)
-        # ========================================================
-
-        summary['simulnr_cpy'] = summary.simulnr
-        summary['simulnr'] = 1
-        summary = summary.join(wide_tar_at_pd, on=['pensioenlfd',
-                                                   'geslacht',
-                                                   'simulnr',
-                                                   'leeftijd0'
-                                                   ])
-        summary['simulnr'] = summary.simulnr_cpy
-
-        # 7) calculate
-        combi_factor_100_70 = summary.tar_OPLL + 0.70 * summary.tar_NPLLRS
-        summary['projectie_op'] = summary.capital / combi_factor_100_70
-        summary['projectie_op_plus_pv'] = (summary.projectie_op +
-                                           (summary.op_premievrij *
-                                            summary.tar_OPLL +
-                                            summary.np_premievrij *
-                                            summary.tar_NPLLRS) /
-                                           combi_factor_100_70)
-        summary['projectie_op_plus_pv_aow'] = (summary.projectie_op_plus_pv +
-                                               summary.aow)
-        summary['projectie_op_wg'] = ((summary.capital -
-                                      summary.cum_eigen_bijdrage) /
-                                      combi_factor_100_70)
-        summary['projectie_op_wn'] = (summary.projectie_op -
-                                      summary.projectie_op_wg)
-
-        empl_data = self.data.tbl_employee[['geboortedatum',
-                                           'ft_salaris', 'pt_percentage']]
-        summary = (summary.reset_index().
-                   join(empl_data, on=['id']).set_index(['regeling_id', 'id']))
-        plan_data = (self.data.tbl_pension_plan.
-                     groupby('regeling_id')[['premie_franchise',
-                                             'premie_plafond',
-                                             'pct_eigen_bijdrage']].first())
-        summary = (summary.reset_index().
-                   join(plan_data, on=['regeling_id']).
-                   set_index(['regeling_id', 'id']))
+        # join lookup tables into summary frame
+        summary_cols = ['regeling_id', 'id', 'simulnr', 'aow',
+                        'cum_eigen_bijdrage', 'geslacht', 'leeftijd0',
+                        'memo', 'naam', 'pensioenlfd', 'type_regeling',
+                        'geboortedatum', 'ft_salaris', 'pt_percentage',
+                        'premie_franchise', 'premie_plafond',
+                        'pct_eigen_bijdrage', 'eigen_bijdrage',
+                        'capital', 'tijdsevenredig']
+        selected_rows = ((self.tableau.fsy == 1) &
+                         (self.tableau.aanspraak.isin(['OPLL', 'VARL'])))
+        summary = self.tableau[selected_rows][summary_cols]
+        summary.rename({'ft_salaris': 'projectie_ft_salaris',
+                        'premie_franchise': 'projectie_premie_franchise',
+                        'premie_plafond': 'projectie_premie_plafond',
+                        'aow': 'projectie_aow'}, axis=1, inplace=True)
+        summary['simulnr_tmp'] = summary.simulnr.map(
+          lambda x: modulo_map(x, n))
+        summary = summary.join(lookup_combi,
+                               on=['pensioenlfd', 'geslacht',
+                                   'leeftijd0', 'simulnr_tmp'])
+        summary = summary.join(lookup_capital,
+                               on=['regeling_id', 'id', 'simulnr'])
+        summary['aow'] = self.data.tbl_assumption['aow'][0]
+        employees = self.data.tbl_employee
+        summary = summary.join(employees[['ft_salaris', 'op_premievrij',
+                                          'np_premievrij']], on='id')
+        plans = self.data.tbl_pension_plan.groupby(
+          'regeling_id')[['premie_franchise', 'premie_plafond']].first()
+        summary = summary.join(plans, on=['regeling_id'])
+        summary['projectie_op_dc'] = summary.capital / summary.tar_combi
+        summary['projectie_op'] = (summary.tijdsevenredig +
+                                   summary.projectie_op_dc)
+        pv = ((summary.op_premievrij * summary.tar_OPLL +
+               summary.np_premievrij * summary.tar_NPLLRS) / summary.tar_combi)
+        summary['projectie_op_plus_pv'] = summary.projectie_op + pv
+        summary['projectie_op_plus_pv_aow'] = (
+          summary.projectie_op_plus_pv + summary.projectie_aow)
+        summary['capital'] = summary.capital.fillna(0)
+        summary['capital_db'] = summary.capital_db.fillna(0)
+        summary['capital'] = summary.capital + summary.capital_db
+        summary['projectie_op_wg'] = (
+          summary.capital - summary.cum_eigen_bijdrage) / summary.tar_combi
+        summary['projectie_op_wn'] = (
+          summary.projectie_op - summary.projectie_op_wg)
         pension_salary = np.minimum(summary.ft_salaris, summary.premie_plafond)
-        summary['eigen_bijdrage0'] = (summary.pt_percentage *
-                                      summary.pct_eigen_bijdrage *
-                                      np.maximum(0, pension_salary -
-                                                 summary.premie_franchise))
-        summary.drop(['simulnr_cpy'], axis=1, inplace=True)
-        return summary
+        summary['eigen_bijdrage0'] = (
+          summary.pt_percentage * summary.pct_eigen_bijdrage *
+          np.maximum(0, pension_salary - summary.premie_franchise))
+        final_cols = ['id', 'regeling_id', 'simulnr','naam', 'geboortedatum',
+                      'geslacht', 'leeftijd0', 'ft_salaris', 'pt_percentage',
+                      'aow', 'np_premievrij', 'op_premievrij', 'memo',
+                      'type_regeling', 'pensioenlfd', 'pct_eigen_bijdrage',
+                      'eigen_bijdrage0', 'premie_franchise', 'premie_plafond',
+                      'projectie_ft_salaris', 'projectie_aow',
+                      'projectie_premie_franchise', 'projectie_premie_plafond',
+                      'projectie_op', 'projectie_op_plus_pv',
+                      'projectie_op_plus_pv_aow', 'projectie_op_wg',
+                      'projectie_op_wn', 'tar_NPLLRS', 'tar_OPLL',
+                      'cum_eigen_bijdrage', 'capital']
+        return summary[final_cols]

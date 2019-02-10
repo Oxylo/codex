@@ -48,7 +48,6 @@ def past_service_years(service_date, calculation_date,
     return vectorized(service_date, calculation_date, method)
 
 
-
 def total_service_years(past_service_years, future_service_years):
     """ Return total service years
     """

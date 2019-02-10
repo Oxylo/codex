@@ -4,15 +4,17 @@ Actuarial library for benefit projections and simulations
 Installation (local)
 ====================
 
-    $ git clone https://github.com/Oxylo/codex.git my_project_name
+    $ git clone https://github.com/Oxylo/codex.git your_project_name
     $ pip install -r requirements.txt
     
     
 Example
 =======
 
+Copy data/template.xlsx to newdata.xlsx and fill out data in this sheet. 
+
     >>> from codex import Tableau
-    >>> tab = Tableau()
+    >>> tab = Tableau(xlswb='newdata.xlsx', nsimuls=1)
     >>> detailed_output = tab.tableau
     >>> summary = tab.add_summary()
 
@@ -28,13 +30,11 @@ Tests
 
 
 
-Note: 
-The idea is to create a Tableau object first, containing all data and projection calculations.
-
-Tableau objects is initialized with the following (default) parameters:
-* xlswb='/home/pieter/projects/codex/data/codex_data_db.xls'
-* nsimuls=1
-* maxyears=None
+How it works
+============ 
+When the Tableau objects is initialized, all tables from newdata.xlsx are merged into one large table (a so called Tableau) featuring one record for each combination of employee, pension plan, claim, simulation and projection year. For example if you fill your newdata.xlsx with 1 50 year old employee, 3 pension plans containing 2 claims each for 1 simulation, Tableau will contain 1 employee x 3 plans x 2 claims x 1 simulation x 18 projection years = 108 records (assuming pension age to be 68 years). Projection calculations are performed on each record.
+The next step is running the add_summary method, resulting in a table with 1 record for each combination of employee, pension plan and simulation number. For each record, this table contains the projected capitals and pension entitlements at the pension date.
+   
 
 
   

@@ -12,8 +12,10 @@ from codex import Tableau
 TESTDATA = 'codex_test_data_wtw.xlsx'
 MAXERROR = 0.25  # Absolute difference must be less than 0.25 percent
 TEST_COLS = ['wtw_projectie_op',  'wtw_projectie_kapitaal']
+TEST_INDEX = ['regeling_id', 'deelnemer_id']
 CALCULATED_COLS = ['projectie_op', 'capital']
-MERGE_INDEX = ['regeling_id', 'deelnemer_id']
+CALCULATED_INDEX = ['regeling_id', 'id']
+
 NSIMULS = 1
 
 # ----- fixtures ------------------------------------------------------
@@ -29,9 +31,10 @@ test_values = pd.read_excel(abs_file_path, sheet_name='test_waarden')
 def test_add_summary():
 
     calculated_values = tab.add_summary()
+    calculated_values.set_index(CALCULATED_INDEX, inplace=True)
     merged = test_values.join(calculated_values[CALCULATED_COLS],
-                              on=MERGE_INDEX)
-    merged.set_index(MERGE_INDEX, inplace=True)
+                              on=TEST_INDEX)
+    merged.set_index(TEST_INDEX, inplace=True)
     comp = compare(merged, TEST_COLS, CALCULATED_COLS)
 
     print('\n\n*** Top 20 differences: ***')

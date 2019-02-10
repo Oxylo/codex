@@ -13,9 +13,10 @@ TESTDATA = 'codex_test_data_pwc.xlsx'
 MAXERROR = 0.25  # Absolute difference must be less than 0.25 percent
 TEST_COLS = ['pwc_projectie_op_plus_pv_aow', 'pwc_eigen_bijdrage0',
              'xls_projectie_op_wg',  'xls_projectie_op_wn']
+TEST_INDEX = ['regeling_id', 'deelnemer_id']
 CALCULATED_COLS = ['projectie_op_plus_pv_aow', 'eigen_bijdrage0',
                    'projectie_op_wg',  'projectie_op_wn']
-MERGE_INDEX = ['regeling_id', 'deelnemer_id']
+CALCULATED_INDEX = ['regeling_id', 'id']
 NSIMULS = 1
 
 # ----- fixtures ------------------------------------------------------
@@ -31,9 +32,10 @@ test_values = pd.read_excel(abs_file_path, sheet_name='test_waarden')
 def test_add_summary():
 
     calculated_values = tab.add_summary()
+    calculated_values.set_index(CALCULATED_INDEX, inplace=True)
     merged = test_values.join(calculated_values[CALCULATED_COLS],
-                              on=MERGE_INDEX)
-    merged.set_index(MERGE_INDEX, inplace=True)
+                              on=TEST_INDEX)
+    merged.set_index(TEST_INDEX, inplace=True)
     comp = compare(merged, TEST_COLS, CALCULATED_COLS)
 
     print('\n\n*** Top 20 differences: ***')
