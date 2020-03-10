@@ -5,6 +5,9 @@ Installation (local)
 ====================
 
     $ git clone https://github.com/Oxylo/codex.git your_project_name
+    $ cd your_project_name
+    $ python3 -m venv venv
+    $ source venv/bin/activate
     $ pip install -r requirements.txt
     
     
@@ -12,6 +15,7 @@ Usage
 =====
 
 Copy data/template.xlsx or data/template_incl_scenarios.xlsx to newdata.xlsx and fill out data in this sheet. 
+Fire up Python and run:
 
     >>> from codex import Tableau
     >>> tab = Tableau(xlswb='newdata.xlsx', nsimuls=1)
